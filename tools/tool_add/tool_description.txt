@@ -1,0 +1,1 @@
+{"type":"function","function":{"name":"test_feature","description":"A simple test feature for demonstration purposes.","parameters":{"type":"object","properties":{}},"required":[]}}
