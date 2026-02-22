@@ -17,7 +17,7 @@ from tools.memory_store import handle_memory_overflow,summarize_func
 from tools.memory_retrieval import load_memories_for_conversation
 
 client = OpenAI(
-    api_key="sk-ujecYWuE6lhVJ3zeZqS3Qb9jTu5HY2jOKd6X83Ho9lmznGNu",
+    api_key="sk-",
     base_url="https://poloai.top/v1", 
 )
 
