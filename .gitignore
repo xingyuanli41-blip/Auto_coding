@@ -1,0 +1,17 @@
+# 虚拟环境
+venv/
+env
+
+# 编译文件
+__pycache__/
+*.py[cod]
+
+# VS Code 配置
+vscode/
+
+# 数据文件
+*.csv
+*.json
+
+# Jupyter 检查点
+ipynb_checkpoints/
