@@ -114,10 +114,7 @@ def summarize_func(
         return "[总结失败]"
 
 
-# client = OpenAI(
-#     api_key="sk-ujecYWuE6lhVJ3zeZqS3Qb9jTu5HY2jOKd6X83Ho9lmznGNu",
-#     base_url="https://poloai.top/v1", 
-# )
+
 
 
 # # 创建短期和长期记忆实例
