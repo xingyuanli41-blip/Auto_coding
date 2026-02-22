@@ -1,1 +1,3 @@
 {"type":"function","function":{"name":"test_feature","description":"A simple test feature for demonstration purposes.","parameters":{"type":"object","properties":{}},"required":[]}}
+{"type":"function","function":{"name":"compute_factorial","description":"Calculate the factorial of a non-negative integer N.","parameters":{"type":"object","properties":{"N":{"type":"integer","description":"A non-negative integer whose factorial is to be computed."}},"required":["N"]}}}
+{"type":"function","function":{"name":"compute_circle_area","description":"Calculate the area of a circle given its radius.","parameters":{"type":"object","properties":{"radius":{"type":"number","description":"The radius of the circle."}},"required":["radius"]}}}
