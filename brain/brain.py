@@ -127,12 +127,16 @@ class AgentBrain:
 
         # 过滤孤立的 tool 消息（DeepSeek 要求前置 assistant+tool_calls）
         filtered = []
-        for i, m in enumerate(result):
-            if m.get("role") == "tool":
-                prev = filtered[-1] if filtered else None
-                if not prev or prev.get("role") != "assistant" or not prev.get("tool_calls"):
-                    continue
-            filtered.append(m)
+        last_assistant_with_tc = None
+        for m in result:
+            if m.get("role") == "assistant" and m.get("tool_calls"):
+                last_assistant_with_tc = m
+                filtered.append(m)
+            elif m.get("role") == "tool":
+                if last_assistant_with_tc is not None:
+                    filtered.append(m)
+            else:
+                filtered.append(m)
         return filtered
 
     def _register_brain_tools(self):

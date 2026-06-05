@@ -84,6 +84,15 @@ class _Config:
 
     @property
     def brain_system_prompt(self) -> str:
+        # 优先从文件读取
+        prompt_file = self._get("brain", "system_prompt_file", default="")
+        if prompt_file and os.path.exists(prompt_file):
+            try:
+                with open(prompt_file, "r", encoding="utf-8") as f:
+                    return f.read().strip()
+            except Exception:
+                pass
+        # 回退到内嵌文本
         return self._get("brain", "system_prompt",
                           default="你是一个智能助手，擅长思考、规划和使用工具完成任务。")
 
@@ -126,6 +135,10 @@ class _Config:
     @property
     def tools_maintenance_days(self) -> int:
         return self._get("tools", "maintenance_days_unused", default=7)
+
+    @property
+    def tools_workspace_dir(self) -> str:
+        return self._get("tools", "workspace_dir", default="./workspace")
 
     @property
     def tools_maintenance_min_usage(self) -> int:

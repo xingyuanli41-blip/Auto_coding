@@ -71,18 +71,54 @@ class MemoryManager:
     def add_system_message(self, content: str) -> None:
         self.working_memory.add_message(Message.system_message(content=content))
 
+    def remember_turn(self, user_msg: str, assistant_msg: str):
+        """每轮对话后自动提取关键信息存入短期记忆"""
+        # 快速关键词提取（避免每轮都调LLM）
+        facts = []
+        # 用户偏好/信息模式
+        import re
+        patterns = [
+            (r'(?:我叫|我是|名字是)\s*([^\s，。,！!记住]+)', '用户名'),
+            (r'(?:喜欢|爱好|偏好)\s*([^，。,！!记住]+)', '偏好'),
+            (r'(?:生日|出生).*?(\d+月\d+[号日])', '生日'),
+            (r'(?:在|住在|工作于)\s*([^\s，。,！!工作]{2,8})', '地点'),
+            (r'(?:做|从事|是).{0,5}(?:开发|工程师|程序员|设计|产品|运营|测试)', '职业'),
+        ]
+        for pattern, tag in patterns:
+            for match in re.findall(pattern, user_msg):
+                val = match.strip().rstrip('，。,！!记住')
+                if len(val) > 1 and len(val) < 30:
+                    facts.append(f"[{tag}] {val}")
+
+        for fact in facts[:3]:  # 最多存3条
+            # 去重检查
+            existing = [i.content for i in self.short_term_memory.items]
+            if not any(fact in e for e in existing):
+                item = MemoryItem(
+                    content=fact, importance=0.6,
+                    tags=["fact", "auto"], memory_layer="episodic",
+                    metadata={"extracted_at": datetime.now().isoformat()},
+                )
+                self._embed_and_store(item, layer="short_term")
+
     def get_working_context(self, max_tokens: Optional[int] = None) -> List[Dict]:
         budget = max_tokens or self.working_token_budget
         raw = self.working_memory.to_dict_list()
 
         # 过滤孤立的 tool 消息（DeepSeek 要求前置 assistant+tool_calls）
+        # tool 消息前必须有 assistant+tool_calls；多个连续 tool 都可以对应同一个 assistant
         valid = []
+        last_assistant_with_tc = None
         for msg in raw:
-            if msg.get("role") == "tool":
-                prev = valid[-1] if valid else None
-                if not prev or prev.get("role") != "assistant" or not prev.get("tool_calls"):
-                    continue
-            valid.append(msg)
+            if msg.get("role") == "assistant" and msg.get("tool_calls"):
+                last_assistant_with_tc = msg
+                valid.append(msg)
+            elif msg.get("role") == "tool":
+                if last_assistant_with_tc is not None:
+                    valid.append(msg)
+                # 否则跳过孤立 tool
+            else:
+                valid.append(msg)
 
         # Token 预算截断：仅当消息过多时从旧→新保留
         if len(valid) > 50:  # 粗略阈值，避免截断正常对话
@@ -96,20 +132,27 @@ class MemoryManager:
 
     def check_and_consolidate(self) -> bool:
         tokens = estimate_messages_tokens(self.working_memory.messages)
-        if tokens < self.working_token_budget * 0.8:
+        if tokens < self.working_token_budget * 0.6:  # 60%就触发，留足空间
             return False
-        self._summarize_working_to_short_term()
+        # 超过阈值 → 摘要旧消息，保留最新 40%
+        keep_count = max(int(len(self.working_memory.messages) * 0.4), 4)
+        self._summarize_working_to_short_term(keep_count=keep_count)
         return True
 
     # ==================== Layer 2: 短期记忆 ====================
 
-    def _summarize_working_to_short_term(self) -> None:
+    def _summarize_working_to_short_term(self, keep_count: int = None) -> None:
         total = len(self.working_memory.messages)
         if total < 5:
             return
-        archive_count = int(total * 0.7)
-        keep_count = total - archive_count
-        to_archive = self.working_memory.messages[:archive_count]
+        if keep_count is None:
+            keep_count = max(int(total * 0.4), 4)
+
+        # 保护系统提示：永远不归档 role=system 的消息
+        sys_msgs = [m for m in self.working_memory.messages if m.role == "system"]
+        non_sys = [m for m in self.working_memory.messages if m.role != "system"]
+        archive_count = max(len(non_sys) - keep_count, 0)
+        to_archive = non_sys[:archive_count]
 
         conversation_text = "\n".join(
             f"[{msg.role}] {msg.content or ''}" for msg in to_archive)
@@ -130,7 +173,8 @@ class MemoryManager:
                 metadata={"extracted_at": datetime.now().isoformat()},
             ), layer="short_term")
 
-        self.working_memory.messages = self.working_memory.messages[-keep_count:]
+        kept_non_sys = non_sys[-keep_count:] if keep_count < len(non_sys) else non_sys
+        self.working_memory.messages = sys_msgs + kept_non_sys
         self.stats["summarizations"] += 1
 
     def _llm_summarize_and_extract(self, text: str) -> Tuple[str, List[str]]:
@@ -249,47 +293,50 @@ class MemoryManager:
     # ==================== 检索 ====================
 
     def recall(self, query: str, top_k: int = 5, include_working: bool = True) -> List[Dict]:
-        terms = query.lower().split()
+        """TF-IDF 语义检索 — 从三层记忆中召回最相关的信息"""
+        from memory.embeddings import TFIDFEmbedder
 
-        def _matches(text: str) -> bool:
-            return all(t in (text or "").lower() for t in terms)
+        # 使用 TF-IDF 计算语义相似度（替代简单关键词匹配）
+        tfidf = TFIDFEmbedder()
+        candidates: List[Dict] = []
 
-        results = []
-
+        # 收集候选文档
         if include_working:
-            for msg in reversed(self.working_memory.messages):
-                if _matches(msg.content or ""):
-                    results.append({"content": msg.content, "source": "working",
-                                    "score": 1.0, "timestamp": datetime.now()})
+            for msg in self.working_memory.messages:
+                if msg.content:
+                    candidates.append({"content": msg.content, "source": "working",
+                                       "timestamp": datetime.now(), "type": "msg"})
+        for item in self.short_term_memory.items:
+            candidates.append({"content": item.content, "source": "short_term",
+                               "timestamp": item.timestamp, "type": "item"})
+        for item in self.long_term_memory.items:
+            candidates.append({"content": item.content, "source": "long_term",
+                               "timestamp": item.timestamp, "type": "item"})
 
-        short_hits = self.short_term_memory.find_all(
-            lambda item: _matches(item.content))
-        for item in short_hits[:top_k]:
-            results.append({"content": item.content, "source": "short_term",
-                            "score": 0.8, "timestamp": item.timestamp})
+        # 无候选 → 回退关键词匹配
+        if not candidates:
+            return []
 
-        query_vec = None
-        if isinstance(self.embedder, OpenAIEmbedder):
-            try:
-                query_vec = self.embedder.embed(query)
-            except Exception:
-                logger.debug("query embedding failed", exc_info=True)
+        # TF-IDF 评分
+        docs = [{"content": c["content"]} for c in candidates]
+        scored = tfidf.search_by_tfidf(query, docs, top_k=min(top_k * 3, len(docs)))
 
-        if query_vec:
-            long_hits = self.long_term_memory.search_hybrid(
-                query, query_vec, self.embedder, top_k=top_k)
-        else:
-            long_hits = self.long_term_memory.find_all(
-                lambda item: _matches(item.content))[:top_k]
+        # 组装结果
+        results = []
+        for doc, score in scored:
+            if score <= 0:
+                continue
+            # 找回原始候选
+            for c in candidates:
+                if c["content"] == doc["content"]:
+                    results.append({**c, "score": round(score, 3)})
+                    break
 
-        for item in long_hits:
-            results.append({"content": item.content, "source": "long_term",
-                            "score": item.importance, "timestamp": item.timestamp})
-
+        # 去重 + 排序
         seen = set()
         unique = []
         for r in sorted(results, key=lambda x: x["score"], reverse=True):
-            key = r["content"][:50]
+            key = r["content"][:60]
             if key not in seen:
                 seen.add(key)
                 unique.append(r)
@@ -347,18 +394,12 @@ class MemoryManager:
     # ==================== 持久化 ====================
 
     def save(self) -> None:
-        self.working_memory.save_to_file(self.working_memory_file)
+        # 短期记忆中的事实先巩固到长期记忆再保存
+        self.consolidate_to_long_term()
         self.long_term_memory.save_to_file_overwrite(self.long_term_memory_file)
-        if self.short_term_memory.items:
-            self.long_term_memory.save_to_file(self.long_term_memory_file)
 
     def _restore(self) -> None:
-        if os.path.exists(self.working_memory_file) and os.path.getsize(self.working_memory_file) > 0:
-            try:
-                self.working_memory = Memory.load_from_file(self.working_memory_file)
-            except Exception:
-                logger.debug("restore working memory failed", exc_info=True)
-
+        # 每次启动从干净的工作记忆开始（防止旧对话混入新会话）
         if os.path.exists(self.long_term_memory_file) and os.path.getsize(self.long_term_memory_file) > 0:
             try:
                 restored = LongTermMemory.load_from_file(

@@ -16,8 +16,8 @@
         "path"
       ]
     },
-    "usage_count": 36,
-    "last_used": "2026-06-05T14:41:19.622402"
+    "usage_count": 55,
+    "last_used": "2026-06-05T17:18:11.244247"
   },
   {
     "name": "run_command",
@@ -36,8 +36,8 @@
         "command"
       ]
     },
-    "usage_count": 11,
-    "last_used": "2026-06-05T13:05:32.291380"
+    "usage_count": 40,
+    "last_used": "2026-06-05T17:09:25.214494"
   },
   {
     "name": "create_directory",
@@ -55,7 +55,9 @@
       "required": [
         "path"
       ]
-    }
+    },
+    "usage_count": 1,
+    "last_used": "2026-06-05T15:21:38.898662"
   },
   {
     "name": "create_file",
@@ -81,7 +83,9 @@
       "required": [
         "path"
       ]
-    }
+    },
+    "usage_count": 6,
+    "last_used": "2026-06-05T17:00:02.575458"
   },
   {
     "name": "write_file",
@@ -112,7 +116,11 @@
         "path",
         "content"
       ]
-    }
+    },
+    "usage_count": 7,
+    "last_used": "2026-06-05T17:09:21.533607",
+    "error_count": 1,
+    "last_error": "2026-06-05T16:59:59.598179"
   },
   {
     "name": "delete_file",
@@ -130,7 +138,9 @@
       "required": [
         "path"
       ]
-    }
+    },
+    "usage_count": 1,
+    "last_used": "2026-06-05T15:21:38.898662"
   },
   {
     "name": "delete_tool",

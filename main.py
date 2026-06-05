@@ -4,7 +4,7 @@ root_dir = Path(__file__).resolve().parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
-from brain.call import *
+from brain.call import call_openai_with_tools
 from config import config
 from tools.mcp_pool import MCPToolPool
 from memory import MemoryManager
@@ -15,7 +15,7 @@ from memory.models import Message, Function, ToolCall
 # ═══════════════════════════════════════
 
 client = config.create_llm_client()
-tool_pool = MCPToolPool(pool_file=config.tools_pool_file, code_dir=config.tools_code_dir)
+tool_pool = MCPToolPool(pool_file=config.tools_pool_file, code_dir=config.tools_code_dir, workspace_dir=config.tools_workspace_dir, limitation_file="./limitation.txt")
 print(f"🛠️ {tool_pool.summary()}")
 
 # 启动时自动清理过期工具
@@ -35,6 +35,9 @@ memory = MemoryManager(
     long_term_memory_file=config.memory_long_term_file,
 )
 print(f"🧠 {memory.summary()}")
+
+# 注入系统提示（从 config.json 读取）
+memory.add_system_message(config.brain_system_prompt)
 
 # ═══════════════════════════════════════
 # / 命令系统
@@ -149,7 +152,7 @@ while True:
         if action == "exit":
             try:
                 memory.save()
-                print(f"💾 记忆已保存至 {config.memory_working_file}")
+                print(f"💾 长期记忆已保存（{len(memory.long_term_memory.items)} 项）")
                 print(f"🛠️ {tool_pool.summary()}")
             except Exception as e:
                 print(f"保存出错：{e}")
@@ -201,6 +204,7 @@ while True:
         else:
             final_answer = assistant_message.content or "[无内容]"
             memory.add_assistant_message(final_answer)
+            memory.remember_turn(user_input, final_answer)
             print(f"🤖 {final_answer}\n")
             break
     else:

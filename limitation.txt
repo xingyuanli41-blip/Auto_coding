@@ -1,0 +1,35 @@
+# ============================================================
+# 安全限制配置
+# - [commands] 下的命令禁止执行
+# - [files] 下的路径/文件名禁止读取
+# - 支持 * 通配符
+# - 以 # 开头的行为注释
+# ============================================================
+
+[commands]
+rm -rf /
+rm -rf /*
+del /f /s C:\
+del /f /s C:\Windows
+format
+shutdown
+sudo rm
+> /dev/sda
+mkfs
+dd if=
+:fork
+while true
+:(){ :|:& };:
+
+[files]
+config.json
+.env
+*.key
+*.pem
+*.p12
+id_rsa
+id_ed25519
+ known_hosts
+authorized_keys
+credentials
+secrets

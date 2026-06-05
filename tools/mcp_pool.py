@@ -67,15 +67,26 @@ class MCPToolPool:
         self,
         pool_file: str = "./tools/mcp_tools.json",
         code_dir: str = "./tools/tool_add/tool_direct",
+        workspace_dir: str = "./workspace",
+        limitation_file: str = "./limitation.txt",
     ):
         """
         Args:
             pool_file: mcp_tools.json 路径
             code_dir: 工具 .py 文件存放目录
+            workspace_dir: 工作空间根目录
+            limitation_file: 安全限制配置（禁用命令/文件）
         """
         self.pool_file = pool_file
         self.code_dir = code_dir
+        self.workspace_dir = os.path.abspath(workspace_dir)
+        os.makedirs(self.workspace_dir, exist_ok=True)
         self._lock = threading.Lock()
+
+        # 加载安全限制
+        self._forbidden_commands: List[str] = []
+        self._forbidden_files: List[str] = []
+        self._load_limitations(limitation_file)
 
         # 内存中的工具注册表: name → {name, description, code_file, parameters, enabled, ...}
         self.tools: Dict[str, Dict] = {}
@@ -475,6 +486,26 @@ class MCPToolPool:
         tool["usage_count"] = tool.get("usage_count", 0) + 1
         tool["last_used"] = datetime.now().isoformat()
 
+        # === 安全检查：run_command ===
+        if name == "run_command" and "command" in arguments:
+            blocked = self._check_command(arguments["command"])
+            if blocked:
+                return blocked
+
+        # === 安全检查：read_file 禁止读取敏感文件 ===
+        if name == "read_file" and "path" in arguments:
+            blocked = self._check_file_read(arguments["path"])
+            if blocked:
+                return blocked
+
+        # === 工作空间路径校验（仅写/删/创建，读操作不受限） ===
+        _FILE_TOOLS = {"write_file", "create_file", "delete_file", "create_directory"}
+        if name in _FILE_TOOLS and "path" in arguments:
+            try:
+                arguments["path"] = self._resolve_path(arguments["path"])
+            except PermissionError as e:
+                return str(e)
+
         result = self._execute_file_tool(name, arguments, tool)
 
         # delete_tool 执行后刷新池状态（文件已由工具函数清理）
@@ -729,6 +760,102 @@ class MCPToolPool:
         else:
             return self.enable_tool(name)
 
+    # ==================== 工作空间安全 ====================
+
+    def _resolve_path(self, path: str) -> str:
+        """
+        将用户/LLM 提供的路径解析到工作空间内。
+
+        规则:
+        - 相对路径 → 拼接在 workspace_dir 下
+        - 绝对路径 → 必须在 workspace_dir 内，否则拒绝
+        - 包含 .. 的路径 → 规范化后检查是否越界
+
+        Returns:
+            解析后的绝对路径
+
+        Raises:
+            PermissionError: 路径超出工作空间范围
+        """
+        # 规范化：去除 LLM 可能误加的 workspace/workspace_dir 前缀
+        ws_name = os.path.basename(self.workspace_dir)
+        normalized = os.path.normpath(path)
+        # 去掉前导的 ./workspace/ 或 workspace/ （LLM 常误加）
+        if normalized.startswith(f"./{ws_name}/") or normalized.startswith(f".\\{ws_name}\\"):
+            normalized = normalized[len(f"./{ws_name}/"):]
+        elif normalized.startswith(f"{ws_name}/") or normalized.startswith(f"{ws_name}\\"):
+            normalized = normalized[len(f"{ws_name}/"):]
+
+        if os.path.isabs(normalized):
+            abs_path = normalized
+        else:
+            abs_path = os.path.normpath(os.path.join(self.workspace_dir, normalized))
+
+        # 安全检查：必须在 workspace_dir 内
+        workspace = os.path.normpath(self.workspace_dir)
+        if not abs_path.startswith(workspace + os.sep) and abs_path != workspace:
+            raise PermissionError(
+                f"🚫 工作空间保护：禁止访问 '{path}'（解析为 '{abs_path}'）。"
+                f"所有文件操作必须在 '{self.workspace_dir}' 内进行。"
+            )
+
+        # 自动创建父目录
+        parent = os.path.dirname(abs_path)
+        if parent and not os.path.exists(parent):
+            os.makedirs(parent, exist_ok=True)
+
+        return abs_path
+
+    # ==================== 安全限制 ====================
+
+    def _load_limitations(self, filepath: str):
+        """从 limitation.txt 加载禁止执行的命令和禁止读取的文件"""
+        if not os.path.exists(filepath):
+            return
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                section = None
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    if line == "[commands]":
+                        section = "commands"
+                    elif line == "[files]":
+                        section = "files"
+                    elif section == "commands":
+                        self._forbidden_commands.append(line.lower())
+                    elif section == "files":
+                        self._forbidden_files.append(line.lower())
+        except Exception:
+            pass
+
+    def _check_command(self, command: str) -> Optional[str]:
+        """检查命令是否被禁止。返回 None 表示通过，否则返回禁止原因。"""
+        cmd_lower = command.lower().strip()
+        for forbidden in self._forbidden_commands:
+            if self._wildcard_match(cmd_lower, forbidden):
+                return f"🚫 安全限制：命令 '{command[:60]}' 匹配禁止规则 '{forbidden}'"
+        return None
+
+    def _check_file_read(self, path: str) -> Optional[str]:
+        """检查文件是否被禁止读取。返回 None 表示通过，否则返回禁止原因。"""
+        path_lower = os.path.basename(path).lower()
+        for forbidden in self._forbidden_files:
+            if self._wildcard_match(path_lower, forbidden):
+                return f"🚫 安全限制：文件 '{path}' 匹配禁止规则 '{forbidden}'"
+        return None
+
+    @staticmethod
+    def _wildcard_match(text: str, pattern: str) -> bool:
+        """简单的通配符匹配（支持 *）"""
+        if pattern == text:
+            return True
+        if "*" in pattern:
+            import fnmatch
+            return fnmatch.fnmatch(text, pattern)
+        return pattern in text
+
     # ==================== 展示 ====================
 
     def summary(self) -> str:
@@ -765,13 +892,13 @@ class MCPToolPool:
             try:
                 days = (datetime.now() - datetime.fromisoformat(created)).days
                 parts.append(f"创建{days}天前")
-            except:
+            except (ValueError, TypeError):
                 pass
         if last_used:
             try:
                 days = (datetime.now() - datetime.fromisoformat(last_used)).days
                 parts.append(f"上次使用{days}天前")
-            except:
+            except (ValueError, TypeError):
                 pass
         return ", ".join(parts)
 

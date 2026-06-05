@@ -272,15 +272,14 @@ perm_item = MemoryItem(
 mgr4.long_term_memory.add_item(perm_item)
 mgr4.save()
 
-check(os.path.exists("./memory/archives/test_conversation.json"), "工作记忆文件已保存")
 check(os.path.exists("./memory/archives/test_long_term.json"), "长期记忆文件已保存")
 
-# 恢复
+# 恢复（新会话不恢复工作记忆，防止跨会话污染）
 mgr4b = MemoryManager(
     working_memory_file="./memory/archives/test_conversation.json",
     long_term_memory_file="./memory/archives/test_long_term.json",
 )
-check(len(mgr4b.working_memory.messages) >= 1, "工作记忆恢复")
+check(len(mgr4b.working_memory.messages) == 0, "新会话工作记忆为空")
 check(len(mgr4b.long_term_memory.items) >= 1, "长期记忆恢复")
 
 # 恢复的内容验证
@@ -292,8 +291,7 @@ for item in mgr4b.long_term_memory.items:
 check(found, "恢复的内容包含'张三'")
 
 # 清理测试文件
-for f in ["./memory/archives/test_conversation.json",
-          "./memory/archives/test_long_term.json"]:
+for f in ["./memory/archives/test_long_term.json"]:
     if os.path.exists(f):
         os.remove(f)
 

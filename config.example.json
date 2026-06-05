@@ -23,7 +23,7 @@
     "_comment": "AgentBrain 配置",
     "max_iterations": 100,
     "max_retries": 3,
-    "system_prompt": "你是一个智能助手，擅长思考、规划和使用工具完成任务。如果现有工具不够用，使用 create_tool 创建新工具。"
+    "system_prompt_file": "./system_prompt.txt"
   },
 
   "memory": {
