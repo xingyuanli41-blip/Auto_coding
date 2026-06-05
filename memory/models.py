@@ -542,17 +542,20 @@ def estimate_tokens(text: str) -> int:
     return int(chinese_chars * 1.5 + english_words * 1.3 + other * 0.5)
 
 
-def estimate_messages_tokens(messages: List[Message]) -> int:
+def estimate_messages_tokens(messages: List) -> int:
     """估算消息列表的总 token 数"""
     total = 0
     for msg in messages:
-        text = f"role:{msg.role} "
-        if msg.content:
-            text += msg.content
-        if msg.name:
+        text = ""
+        if hasattr(msg, 'role'):
+            text += f"role:{msg.role} "
+        if hasattr(msg, 'content') and msg.content:
+            text += str(msg.content)
+        if hasattr(msg, 'name') and msg.name:
             text += f" name:{msg.name}"
-        if msg.tool_calls:
+        if hasattr(msg, 'tool_calls') and msg.tool_calls:
             for tc in msg.tool_calls:
-                text += f" call:{tc.function.name}({tc.function.arguments})"
+                tc_name = tc.function.name if hasattr(tc, 'function') else str(tc)
+                text += f" call:{tc_name}"
         total += estimate_tokens(text)
     return total

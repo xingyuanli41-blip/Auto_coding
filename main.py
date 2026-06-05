@@ -8,7 +8,7 @@ from brain.call import *
 from config import config
 from tools.mcp_pool import MCPToolPool
 from memory import MemoryManager
-from memory.models import Message
+from memory.models import Message, Function, ToolCall
 
 # ═══════════════════════════════════════
 # 初始化
@@ -171,9 +171,16 @@ while True:
 
         assistant_message = call_openai_with_tools(
             messages_dict, tool_total, client=client, model=config.llm_model)
-        memory.working_memory.add_message(assistant_message)
 
         if assistant_message.tool_calls:
+            # 构建带 tool_calls 的 assistant 消息（DeepSeek 要求）
+            tcs = [ToolCall(id=tc.id, type="function",
+                   function=Function(name=tc.function.name, arguments=tc.function.arguments))
+                   for tc in assistant_message.tool_calls]
+            msg = Message(role="assistant", content=assistant_message.content or "[tool_call]",
+                          tool_calls=tcs)
+            memory.working_memory.add_message(msg)
+
             for tool_call in assistant_message.tool_calls:
                 func_name = tool_call.function.name
                 try:

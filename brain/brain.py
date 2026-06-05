@@ -124,7 +124,16 @@ class AgentBrain:
                 if d.get('content') is None and d.get('tool_calls'):
                     d = {**d, 'content': '[tool_call]'}
                 result.append(d)
-        return result
+
+        # 过滤孤立的 tool 消息（DeepSeek 要求前置 assistant+tool_calls）
+        filtered = []
+        for i, m in enumerate(result):
+            if m.get("role") == "tool":
+                prev = filtered[-1] if filtered else None
+                if not prev or prev.get("role") != "assistant" or not prev.get("tool_calls"):
+                    continue
+            filtered.append(m)
+        return filtered
 
     def _register_brain_tools(self):
         """注册大脑专属工具到 MCP 池"""

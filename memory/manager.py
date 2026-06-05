@@ -73,18 +73,26 @@ class MemoryManager:
 
     def get_working_context(self, max_tokens: Optional[int] = None) -> List[Dict]:
         budget = max_tokens or self.working_token_budget
-        messages = self.working_memory.to_dict_list()
-        if estimate_messages_tokens(self.working_memory.messages) > budget:
-            kept, used = [], 0
-            for msg in reversed(self.working_memory.messages):
-                msg_dict = msg.to_dict()
-                msg_tokens = estimate_tokens(str(msg_dict))
-                if used + msg_tokens > budget:
+        raw = self.working_memory.to_dict_list()
+
+        # 过滤孤立的 tool 消息（DeepSeek 要求前置 assistant+tool_calls）
+        valid = []
+        for msg in raw:
+            if msg.get("role") == "tool":
+                prev = valid[-1] if valid else None
+                if not prev or prev.get("role") != "assistant" or not prev.get("tool_calls"):
+                    continue
+            valid.append(msg)
+
+        # Token 预算截断：仅当消息过多时从旧→新保留
+        if len(valid) > 50:  # 粗略阈值，避免截断正常对话
+            kept = []
+            for msg in reversed(valid):
+                kept.insert(0, msg)
+                if len(kept) >= 50:
                     break
-                kept.insert(0, msg_dict)
-                used += msg_tokens
             return kept
-        return messages
+        return valid
 
     def check_and_consolidate(self) -> bool:
         tokens = estimate_messages_tokens(self.working_memory.messages)
