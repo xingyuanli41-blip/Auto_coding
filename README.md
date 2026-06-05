@@ -42,10 +42,9 @@
 │
 ├── tools/                    # MCP 工具池
 │   ├── mcp_pool.py           #   工具池核心
-│   ├── workflow.py           #   后台工作流引擎
 │   ├── manage_tools.py       #   维护脚本
 │   ├── mcp_tools.json        #   工具元数据
-│   └── tool_add/tool_direct/ #   12 个持久化工具
+│   └── tool_add/tool_direct/ #   7 个核心工具
 │
 └── test/                     # 测试（94/94 通过）
     ├── test_mcp_tools.py     #   工具池测试 34/34
@@ -160,7 +159,7 @@ LLM 创建的工具体现在两个文件中，**重启后自动加载**：
  LLM主动删除   14天未用自动清理   受保护(7个核心工具)
 ```
 
-### 内置工具（12个）
+### 内置工具（7个核心操作）
 
 | 工具 | 功能 |
 |------|------|
@@ -171,11 +170,8 @@ LLM 创建的工具体现在两个文件中，**重启后自动加载**：
 | `create_directory` | 创建目录 |
 | `run_command` | 执行系统命令（Windows/Linux 自适应） |
 | `delete_tool` | 从 MCP 池删除工具 |
-| `calculate` | 安全计算数学表达式 |
-| `compute_factorial` | 计算阶乘 |
-| `compute_circle_area` | 计算圆面积 |
-| `create_workflow` | 创建后台工作流 |
-| `check_workflow` | 查看工作流状态 |
+
+> 其他功能（计算、爬虫、工作流等）由 LLM 通过 `create_tool` 按需创建，不预置。
 
 ## 三层记忆
 
@@ -217,29 +213,6 @@ results = mgr.recall("小明喜欢什么编程语言")
 # 获取上下文注入 LLM
 ctx = mgr.get_context_for_llm()
 ```
-
-## 工作流
-
-复杂任务可拆分为多步工作流，后台异步执行：
-
-```python
-from tools.workflow import WorkflowEngine
-
-engine = WorkflowEngine()
-wf = engine.create(
-    name="获取热搜",
-    description="爬取并保存今日热搜",
-    steps=[
-        {"tool": "run_command", "args": {"command": "curl ..."}},
-        {"tool": "write_file", "args": {"path": "result.txt", ...}},
-    ]
-)
-engine.run_async(wf.id, pool)  # 后台执行
-# 稍后查看
-status = engine.get(wf.id)
-```
-
-LLM 也可以通过 `create_workflow` 工具自主创建。
 
 ## 使用 AgentBrain API
 

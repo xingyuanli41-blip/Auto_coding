@@ -245,7 +245,7 @@ check(len(results) == 0, f"搜索不存在的关键词返回空列表")
 section("测试 7: list_tools 返回 OpenAI 格式")
 
 tools = pool.list_tools()
-check(isinstance(tools, list) and len(tools) >= 10,
+check(isinstance(tools, list) and len(tools) >= 8,
       f"list_tools 返回 {len(tools)} 个工具")
 
 for t in tools:

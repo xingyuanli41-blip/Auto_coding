@@ -16,8 +16,8 @@
         "path"
       ]
     },
-    "usage_count": 25,
-    "last_used": "2026-06-05T14:04:59.929100"
+    "usage_count": 32,
+    "last_used": "2026-06-05T14:23:09.178516"
   },
   {
     "name": "run_command",
@@ -151,109 +151,5 @@
     },
     "usage_count": 1,
     "last_used": "2026-06-05T11:07:43.144486"
-  },
-  {
-    "name": "compute_factorial",
-    "description": "Calculate the factorial of a non-negative integer N.",
-    "type": "dynamic",
-    "code_file": "tools/tool_add/tool_direct/compute_factorial.py",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "N": {
-          "type": "integer",
-          "description": "A non-negative integer whose factorial is to be computed."
-        }
-      },
-      "required": [
-        "N"
-      ]
-    },
-    "usage_count": 12,
-    "last_used": "2026-06-05T14:04:27.431290",
-    "error_count": 1,
-    "last_error": "2026-06-05T11:30:03.870304"
-  },
-  {
-    "name": "compute_circle_area",
-    "description": "Calculate the area of a circle given its radius.",
-    "type": "dynamic",
-    "code_file": "tools/tool_add/tool_direct/compute_circle_area.py",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "radius": {
-          "type": "number",
-          "description": "The radius of the circle."
-        }
-      },
-      "required": [
-        "radius"
-      ]
-    }
-  },
-  {
-    "name": "check_workflow",
-    "description": "查询工作流状态。参数: wf_id(工作流ID，为空则列出所有)",
-    "type": "dynamic",
-    "code_file": "tools\\tool_add\\tool_direct\\check_workflow.py",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "wf_id": {
-          "type": "string"
-        }
-      },
-      "required": []
-    },
-    "created_at": "2026-06-05T13:28:43.533968",
-    "usage_count": 0
-  },
-  {
-    "name": "create_workflow",
-    "description": "创建一个后台工作流，将复杂任务拆分为多步自动执行。当任务无法一次完成或需要多步操作时使用。参数: name(工作流名称), description(用途描述), steps_json(JSON格式步骤列表，每步含tool和args字段)",
-    "type": "dynamic",
-    "code_file": "tools\\tool_add\\tool_direct\\create_workflow.py",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "steps_json": {
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "description",
-        "steps_json"
-      ]
-    },
-    "created_at": "2026-06-05T13:29:00.250697",
-    "usage_count": 0
-  },
-  {
-    "name": "calculate",
-    "description": "安全计算数学表达式,支持加减乘除、幂运算、括号等。参数 expr 为表达式字符串如 \"2**10\"",
-    "type": "dynamic",
-    "code_file": "tools/tool_add/tool_direct/calculate.py",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "expr": {
-          "type": "string",
-          "description": "数学表达式"
-        }
-      },
-      "required": [
-        "expr"
-      ]
-    },
-    "created_at": "2026-06-05T00:00:00",
-    "usage_count": 0
   }
 ]
